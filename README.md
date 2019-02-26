@@ -88,6 +88,9 @@ hello-world                 latest              fce289e99eb9        7 weeks ago 
 
 </details>
 
+<details>
+  <summary>HomeWork 15 - Docker-контейнеры. Docker под капотом</summary>
+
 ## HomeWork 15 - Docker-контейнеры. Docker под капотом
 
 - Создан проект новый проект "docker" в GCE
@@ -125,7 +128,7 @@ Docker is up and running!
 To see how to connect your Docker Client to the Docker Engine running on this virtual machine, run: docker-machine env docker-host
 ```
 
-- Хост успешно создан 
+- Хост успешно создан
 
 ```bash
 docker-machine ls
@@ -209,6 +212,7 @@ b2fd8b4c3da7: Mounted from library/ubuntu
 ```
 
 - Проверена возможность запуска из образа, который был запушен на Docker Hub, на локальной машине
+
 ```bash
 docker run --name reddit -d -p 9292:9292 darkarren/otus-reddit:1.0
 
@@ -336,3 +340,338 @@ root@b7aaf9b04429:/#
 - Подготовлен сценарий terraform, позволяющий развернуть в облаке n машин на чистой ubuntu 16.04, количество машины определяется переменной vm_count="3" в terraform.tfvars
 - Подготовлены плейбуки ansible: install.yml  - установка docker и необходимых зависимостей, deploy.yml - запуск прилоежния (reddit.yml - запуск плейбуков друг за другом)
 - Подготовлен плейбук для провижининга образа packer - pakcer.yml
+
+</details>
+
+## HomeWork 16 - Docker-образы. Микросервисы
+
+- Установлен линтер hadolint для Dockerfile
+- Подключился к docker-host
+
+<details>
+  <summary>Подключние к docker-host</summary>
+
+```bash
+docker-machine create --driver google --google-machine-image https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/family/ubuntu-1604-lts --google-machine-type n1-standard-1 --google-zone europe-west1-b docker-host
+
+eval $(docker-machine env docker-host)
+```
+
+</details>
+
+- Загрузил архив reddit-microservice и переименовал директорию в src
+- Созданы Dockerfile: ./post-py/Dockerfile, ./ui/Dockerfile, ./comment/Dockerfile
+- По рекомендации hadolint в ./post-py/Dockerfile инструкция ADD заменена на COPY
+- Запущена сборка образа из ./post-py/Dockerfile
+
+<details>
+  <summary>Docker build -t darkarren/post:1.0 ./post-py</summary>
+  
+```bash
+Docker build -t darkarren/post:1.0 ./post-py
+
+gcc -Wno-unused-result -Wsign-compare -DNDEBUG -g -fwrapv -O3 -Wall -Wstrict-prototypes -fPIC -I/usr/local/include/python3.6m -c thriftpy/transport/cybase.c -o build/temp.linux-x86_64-3.6/thriftpy/transport/cybase.o
+unable to execute 'gcc': No such file or directory
+error: command 'gcc' failed with exit status 1
+```
+
+</details>
+
+- Так как сборка завершилась с ошибкой - добавлена установка gcc=5.3.0-r0 и musl-dev=1.1.14-r16
+
+<details>
+  <summary>Docker build -t darkarren/post:1.0 ./post-py</summary>
+  
+```bash
+Docker build -t darkarren/post:1.0 ./post-py
+
+...
+Step 6/7 : ENV POST_DATABASE posts
+ ---> Running in 0be207a9aba4
+Removing intermediate container 0be207a9aba4
+ ---> edce01e1b500
+Step 7/7 : CMD ["python3", "post_app.py"]
+ ---> Running in 94d476f31848
+Removing intermediate container 94d476f31848
+ ---> 460a822d35b5
+Successfully built 460a822d35b5
+Successfully tagged darkarren/post:1.0)
+```
+
+</details>
+
+- Файл ./comment/Dockerfile отредактирован в соответствии с замечаниями hadolint
+- Запущена сборка docker build -t darkarren/comment:1.0 ./comment
+
+<details>
+  <summary>Docker build -t darkarren/comment:1.0 ./comment</summary>
+  
+```bash
+Docker build -t darkarren/comment:1.0 ./comment
+
+...
+Step 9/11 : ENV COMMENT_DATABASE_HOST comment_db
+ ---> Running in 4ab3b428d36b
+Removing intermediate container 4ab3b428d36b
+ ---> 4b66c49c7814
+Step 10/11 : ENV COMMENT_DATABASE comments
+ ---> Running in 8452aaeb171f
+Removing intermediate container 8452aaeb171f
+ ---> 6997dff60de6
+Step 11/11 : CMD ["puma"]
+ ---> Running in b187314d9a88
+Removing intermediate container b187314d9a88
+ ---> f9d0fac5c833
+Successfully built f9d0fac5c833
+Successfully tagged darkarren/comment:1.0
+```
+
+</details>
+
+- Файл ./ui/Dockerfile отредактирован в соответствии с замечаниями hadolint
+- Запущена сборка docker build -t darkarren/ui:1.0 ./ui, часть слоев при сборке переимспользована, так как они уже были созданы при сборке comment:1.0
+
+<details>
+  <summary>docker build -t darkarren/ui:1.0 ./ui</summary>
+  
+```bash
+docker build -t darkarren/ui:1.0 ./ui
+
+...
+Step 11/13 : ENV COMMENT_SERVICE_HOST comment
+ ---> Running in 7e09d35e54a2
+Removing intermediate container 7e09d35e54a2
+ ---> 6c73110a8963
+Step 12/13 : ENV COMMENT_SERVICE_PORT 9292
+ ---> Running in 6524e87b7977
+Removing intermediate container 6524e87b7977
+ ---> 0886f17acb2b
+Step 13/13 : CMD ["puma"]
+ ---> Running in 1126568cc2bc
+Removing intermediate container 1126568cc2bc
+ ---> 01fc57529a44
+Successfully built 01fc57529a44
+Successfully tagged darkarren/ui:1.0
+```
+
+</details>
+
+- Создана сеть для приложения docker network create reddit
+- Запущены контейнеры mongo, comment, ui, post
+
+<details>
+  <summary>docker run</summary>
+  
+```bash
+docker run -d --network=reddit --network-alias=post_db --network-alias=comment_db mongo:latest
+docker run -d --network=reddit --network-alias=post darkarren/post:1.0
+docker run -d --network=reddit --network-alias=comment darkarren/comment:1.0
+docker run -d --network=reddit -p 9292:9292 darkarren/ui:1.0
+```
+
+</details>
+
+- Проверил доступность и работоспособность приложения по адресу <http://docker-host:9292>
+
+### HW16: Заданиче со * 1
+
+- Остановил все запущенные контейнеры docker kill ${docker ps -q}
+- Запустил контейнеры с измененными network-alias и дополнительно переданными значениями переменных
+
+<details>
+  <summary>docker images</summary>
+
+```bash
+docker run -d --network=reddit --network-alias=post_db_1 --network-alias=comment_db_1 mongo:latest \
+&& docker run -d --network=reddit --network-alias=post_1 --env POST_DATABASE_HOST=post_db_1 darkarren/post:1.0 \
+&& docker run -d --network=reddit --network-alias=comment_1 --env COMMENT_DATABASE_HOST=comment_db_1 darkarren/comment:1.0 \
+&& docker run -d --network=reddit --env POST_SERVICE_HOST=post_1 --env COMMENT_SERVICE_HOST=comment_1 -p 9292:9292 darkarren/ui:1.0
+```
+
+</details>
+
+- Проверил доступность и работоспособность приложения по адресу <http://docker-host:9292>
+
+### Образы приложений
+
+- Получил информацию по образам
+
+<details>
+  <summary>docker images</summary>
+  
+```bash
+REPOSITORY          TAG                 IMAGE ID            CREATED             SIZE
+darkarren/ui        1.0                 01fc57529a44        About an hour ago   767MB
+darkarren/comment   1.0                 f9d0fac5c833        2 hours ago         765MB
+darkarren/post      1.0                 be8b9c32ed2b        2 hours ago         198MB
+mongo               latest              0da05d84b1fe        2 weeks ago         394MB
+ruby                2.2                 6c8e6f9667b2        9 months ago        715MB
+python              3.6.0-alpine        cb178ebbf0f2        24 months ago       88.6MB
+```
+
+</details>
+
+- Изменил Dockerfile для ui с учетом рекомендаций hadolint
+
+<details>
+  <summary>docker build -t darkarren/ui:2.0 ./ui</summary>
+
+```bash
+Step 13/13 : CMD ["puma"]
+ ---> Running in fdbfcf9fde17
+Removing intermediate container fdbfcf9fde17
+ ---> bd18fe615ce7
+Successfully built bd18fe615ce7
+Successfully tagged darkarren/ui:2.0
+```
+
+</details>
+
+- Новый образ получился значительно меньше предыдущего
+
+<details>
+  <summary>docker images</summary>
+
+```bash
+docker images
+REPOSITORY          TAG                 IMAGE ID            CREATED             SIZE
+darkarren/ui        2.0                 bd18fe615ce7        6 seconds ago       409MB
+darkarren/ui        1.0                 01fc57529a44        2 hours ago         767MB
+darkarren/comment   1.0                 f9d0fac5c833        2 hours ago         765MB
+darkarren/post      1.0                 be8b9c32ed2b        3 hours ago         198MB
+mongo               latest              0da05d84b1fe        2 weeks ago         394MB
+ubuntu              16.04               7e87e2b3bf7a        4 weeks ago         117MB
+ruby                2.2                 6c8e6f9667b2        9 months ago        715MB
+python              3.6.0-alpine        cb178ebbf0f2        24 months ago       88.6MB
+```
+
+</details>
+
+### HW16: Задание со * 2
+
+- Подготовил новый образ для ui. За счет использования alpine в качестве основного образа, а так же чистки лишних библиотек, которые не нужны после сборки образа, и очистки кэша - удалось уменьшить образ до 38.2MB без потери работоспособности
+
+<details>
+  <summary>./ui/Dockerfile</summary>
+
+```dockerfile
+FROM alpine:3.9
+
+
+ENV APP_HOME /app
+RUN mkdir $APP_HOME
+
+WORKDIR $APP_HOME
+COPY Gemfile* $APP_HOME/
+COPY . $APP_HOME
+RUN apk --no-cache add ruby-bundler=1.17.1-r0 ruby-dev=2.5.3-r1 make=4.2.1-r2 gcc=8.2.0-r2 musl-dev=1.1.20-r3 ruby-json=2.5.3-r1 \
+  && bundle install --clean --no-cache --force \
+  && rm -rf /root/.bundle \
+  && apk --no-cache del ruby-dev make gcc musl-dev
+
+ENV POST_SERVICE_HOST post
+ENV POST_SERVICE_PORT 5000
+ENV COMMENT_SERVICE_HOST comment
+ENV COMMENT_SERVICE_PORT 9292
+
+CMD ["puma"]
+
+```
+
+</details>  
+
+- Подготовил новый образ для post. Удалось уменьшить образ до 106MB
+
+<details>
+  <summary>./post-py/Dockerfile</summary>
+
+```Dockerfile
+FROM python:3.6.0-alpine
+
+WORKDIR /app
+COPY . /app
+
+RUN apk --no-cache add gcc=5.3.0-r0 musl-dev=1.1.14-r16 \
+    && pip --no-cache-dir install -r /app/requirements.txt \
+    && apk --no-cache del gcc musl-dev
+
+ENV POST_DATABASE_HOST post_db
+ENV POST_DATABASE posts
+
+CMD ["python3", "post_app.py"]
+```
+
+</details>
+
+- Подготовил новый образ для comment. Удалось уменьшить до 35.8MB
+
+<details>
+  <summary>./comment/Dockerfile</summary>
+
+```Dockerfile
+FROM alpine:3.9
+
+ENV APP_HOME /app
+
+RUN mkdir $APP_HOME
+WORKDIR $APP_HOME
+COPY Gemfile* $APP_HOME/
+
+RUN apk --no-cache add ruby-bundler=1.17.1-r0 ruby-dev=2.5.3-r1 \
+    make=4.2.1-r2 gcc=8.2.0-r2 musl-dev=1.1.20-r3 ruby-json=2.5.3-r1 ruby-bigdecimal=2.5.3-r1 \
+    && bundle install --clean --no-cache --force \
+    && rm -rf /root/.bundle \
+    && apk --no-cache del ruby-dev make gcc musl-dev
+COPY . $APP_HOME
+
+ENV COMMENT_DATABASE_HOST comment_db
+ENV COMMENT_DATABASE comments
+
+CMD ["puma"]
+```
+
+</details>
+
+- Получившиеся образы в таблице
+
+<details>
+  <summary>docker images | grep darkarren | sort</summary>
+
+```bash
+docker images | grep darkarren | sort
+
+darkarren/comment   1.0                 f9d0fac5c833        9 hours ago         765MB
+darkarren/comment   2.0                 39136f9ffe26        7 minutes ago       35.8MB
+darkarren/post      1.0                 be8b9c32ed2b        9 hours ago         198MB
+darkarren/post      2.0                 9e4761ed5cc1        2 hours ago         106MB
+darkarren/ui        1.0                 01fc57529a44        9 hours ago         767MB
+darkarren/ui        2.0                 bd18fe615ce7        7 hours ago         409MB
+darkarren/ui        2.1                 40cae6eb63df        6 hours ago         164MB
+darkarren/ui        2.2                 40fc6981217f        6 hours ago         62.7MB
+darkarren/ui        2.3                 05cfa129177a        5 hours ago         65.8MB
+darkarren/ui        2.4                 b7b5e76559ae        5 hours ago         38.2MB
+```
+
+</details>
+
+### Docker volume
+
+- Создан docker volume - docker volume create reddit_db
+- Контейнеры перезапущены, к mongodb подключен docker volume
+
+<details>
+  <summary> docker run </summary>
+
+```bash
+docker run -d --network=reddit --network-alias=post_db --network-alias=comment_db -v reddit_db:/data/db mongo:latest \
+&& docker run -d --network=reddit --network-alias=post darkarren/post:2.0 \
+&& docker run -d --network=reddit --network-alias=comment darkarren/comment:2.0 \
+&& docker run -d --network=reddit -p 9292:9292 darkarren/ui:2.4
+e0fd4d9c8dcc65aa77105bdf31c93222af0a8cdeb483f7b315db1284d5aca152
+280acbe7c97d4367bf79957b6c83120a3524b810eba0da73d3f0be990713e5b7
+7e3325fc0523b7ef2965ab3e7e706a0638897d922b492f0417b0088adc9b7677
+f17ce8720c1f5aac24cd65f5513d0ce2d050a3c4988d211de1f64fbcc8c0440a
+```
+</details>
+
+- Добавлен новый пост, контенеры перезапущены, пост на месте.
