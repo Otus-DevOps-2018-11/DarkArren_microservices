@@ -18,3 +18,4 @@ geerlingguy.docker
 .pytest_cache
 venv
 .bak
+.env
