@@ -681,6 +681,9 @@ f17ce8720c1f5aac24cd65f5513d0ce2d050a3c4988d211de1f64fbcc8c0440a
 
 </details>
 
+<details>
+  <summary>HomeWork 17 - Сетевое взаимодействие Docker контейнеров. Docker Compose. Тестирование образов</summary>
+
 ## HomeWork 17 - Сетевое взаимодействие Docker контейнеров. Docker Compose. Тестирование образов
 
 - Работа будет проводиться на docker host (созданный посредством docker-machine), подключение к хосту
@@ -1062,3 +1065,112 @@ Creating avadakedavra_comment_1 ... done
 </details>
 
 - Запустил контейнеры `docker-compose up -d`, написал пост, перезапустилконтейнеры и убедился, что пост сохранился
+
+</details>
+
+## HomeWork 19 - Устройство Gitlab CI. Построение процесса непрерывной поставки
+
+- Создал виртумальную машину через docker-machine
+
+<details>
+  <summary>new docker-machine</summary>
+
+```bash
+docker-machine create --driver google --google-machine-image https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/family/ubuntu-1604-lts --google-machine-type n1-standard-1 --google-disk-size 100 --google-zone europe-west1-b gitlab-ci
+```
+
+</details>
+
+- Подключился к новой vm - `eval $(docker-machine env gitlab-ci)`
+- Разрешил подключение к машину через http - https
+- Создал необходимые директории и файл docker-compose.yml
+
+<details>
+  <summary>gitlab-ci docker-compose</summary>
+
+```bash
+web:
+  image: 'gitlab/gitlab-ce:latest'
+  restart: always
+  hostname: 'gitlab.example.com'
+  environment:
+    GITLAB_OMNIBUS_CONFIG: |
+      external_url 'http://<YOUR-VM-IP>'
+  ports:
+    - '80:80'
+    - '443:443'
+    - '2222:22'
+  volumes:
+    - '/srv/gitlab/config:/etc/gitlab'
+    - '/srv/gitlab/logs:/var/log/gitlab'
+    - '/srv/gitlab/data:/var/opt/gitlab'
+```
+
+</details>
+
+- Установил docker-compose и запустил `docker-compose up -d`
+- Установил root-пароль и залогинился в gitlab
+- Отключил Sign-up
+- Создал Project Group - Homework
+- Создал новый проект в группе - example
+- Добавил remote в репозиторий DarkArren_microservices `git remote add gitlab http://34.76.49.221/homework/example.git`
+- Запушил в gitlab - `git push gitlab gitlab-ci-1`
+- Добавил в репозиторий `.gitalb-ci.yml` и запушил в репозиторий
+- Получил токен для регистрации раннера `DdPTtWTxaS6o8t9G1LPF`
+- Запустил контейнер gitlab-runner на сервере gitlab
+
+<details>
+  <summary>gitlab runner</summary>
+
+```bash
+docker run -d --name gitlab-runner --restart always \
+-v /srv/gitlab-runner/config:/etc/gitlab-runner \
+-v /var/run/docker.sock:/var/run/docker.sock \
+gitlab/gitlab-runner:latest
+```
+
+</details>
+
+- Зарегистрировал gitlab-runner
+
+<details>
+  <summary>gitlab-runner registration</summary>
+
+```bash
+root@gitlab-ci:/home/docker-user# docker exec -it gitlab-runner gitlab-runner register --run-untagged --locked=false
+Runtime platform                                    arch=amd64 os=linux pid=11 revision=4745a6f3 version=11.8.0
+Running in system-mode.
+
+Please enter the gitlab-ci coordinator URL (e.g. https://gitlab.com/):
+http://34.76.49.221/
+Please enter the gitlab-ci token for this runner:
+DdPTtWTxaS6o8t9G1LPF
+Please enter the gitlab-ci description for this runner:
+[730f5101340a]: my-runner
+Please enter the gitlab-ci tags for this runner (comma separated):
+linux,xenial,ubuntu,docker
+Registering runner... succeeded                     runner=DdPTtWTx
+Please enter the executor: shell, virtualbox, docker+machine, docker-ssh+machine, docker, docker-ssh, parallels, ssh, kubernetes:
+docker
+Please enter the default Docker image (e.g. ruby:2.1):
+alpine:latest
+Runner registered successfully. Feel free to start it, but if it's running already the config should be automatically reloaded!
+```
+
+</details>
+
+- Убедился что gitlab-runner доступен в web-интерфейсе
+- Убедился что pipeline запустился и прошел успешно
+- Добавил в репозиторий исходный код прилоежния reddit и запушил в репозиторий gitlab
+- Изменил описание pipeline в .gitlab-ci.yml для запуска тестов приложения
+- Добавил файл `simpletest.rb` с описанием теста в директорию приложения
+- Добавил библиотеку для тестирования `rack-test` в `reddit/Gemfile`
+- Запушил изменения в gitlab и убедился, что тесты прошли
+
+### Окружения
+
+- Изменил deploy_job так, чтобы он стал поределением окржуения dev
+- Убедился в том, что в Operations - Environments появилось описание первого окружения - dev
+- Добавил в .gitlab-ci.yml описание для окружения stage и production
+- Добавил в описание stage и production окружий директиву only, которая позволит запустить job только если установлен semver тэг в git, например, 2.4.10
+- Проверил запуск все job при пуше изменений, которые помечены тегом
