@@ -17,7 +17,8 @@ before_script:
 
 build_job:
   image: docker:latest
-  services: docker:dind
+  services: 
+    - docker:dind
   stage: build
   script:
     - echo 'Building'
