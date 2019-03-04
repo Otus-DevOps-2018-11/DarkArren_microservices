@@ -15,9 +15,8 @@ before_script:
   - bundle install
 
 build_job:
+  image: docker:dind
   stage: build
-  services: 
-    - docker:dind
   script:
     - echo 'Building'
     - docker build -t darkarren/reddit:1.0 ./reddit
