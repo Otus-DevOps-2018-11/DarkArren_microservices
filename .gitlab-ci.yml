@@ -18,6 +18,9 @@ before_script:
 build_job:
   image: docker:dind
   stage: build
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_DRIVER: overlay2
   script:
     - echo 'Building'
     - docker build -t darkarren/reddit:1.0 ./reddit
