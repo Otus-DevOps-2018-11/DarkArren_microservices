@@ -1174,3 +1174,27 @@ Runner registered successfully. Feel free to start it, but if it's running alrea
 - Добавил в .gitlab-ci.yml описание для окружения stage и production
 - Добавил в описание stage и production окружий директиву only, которая позволит запустить job только если установлен semver тэг в git, например, 2.4.10
 - Проверил запуск все job при пуше изменений, которые помечены тегом
+
+### Динамические окружения
+
+- Добавил определение динамического окржуения для веток кроме master
+
+### HW19: Задание со * 1
+
+- Подготовил Dockerfile для сборки контейнера с приложением
+
+<details>
+  <summary>для самопроверки</summary>
+
+```bash
+docker network create reddit
+docker volume create reddit_db
+
+docker run -d --network=reddit --network-alias=mongo -v reddit_db:/data/db mongo:latest \
+&& docker run -d --network=reddit -p 9292:9292 darkarren/reddit:1.0
+```
+
+</details>
+
+- Установил на гитлаб раннер docker (возможно так делать не нужно)
+- добавил в config.toml priveleged = true, добавил "/var/run/docker.sock:/var/run/docker.sock" <https://gitlab.com/gitlab-org/gitlab-runner/issues/1986>
