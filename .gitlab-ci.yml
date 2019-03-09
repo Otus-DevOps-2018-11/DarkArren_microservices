@@ -20,7 +20,10 @@ build_job:
   stage: build
   script:
     - echo 'Building'
-    - docker build -t darkarren/reddit:1.0 ./reddit
+    - docker login -u darkarren -p $docker_hub_password
+    - docker build -t gitlab-reddit:latest ./reddit
+    - docker tag gitlab-reddit:latest darkarren/otus-reddit:2.0
+    - docker push darkarren/otus-reddit:2.0
 
 test_unit_job:
   stage: test
