@@ -64,7 +64,7 @@ branch review:
     - ssh -i ${HOME}/.ssh/id_rsa -l abramov $(gcloud compute instances list --format='table(name,networkInterfaces[].accessConfigs[0].natIP.notnull().list())' | grep gitlab-reddit-$CI_COMMIT_SHA | grep -E -o "([0-9]{1,3}[\.]){3}[0-9]{1,3}") "sudo docker network create reddit && sudo docker volume create reddit_db && sudo docker run -d --network=reddit --network-alias=mongo -v reddit_db:/data/db mongo:latest && sudo docker run -d --network=reddit -p 9292:9292 darkarren/otus-reddit:2.0"
     - echo "Deploy to $CI_ENVIRONMENT_SLUG"
     - sleep 40
-    - curl $$(gcloud compute instances list --format='table(name,networkInterfaces[].accessConfigs[0].natIP.notnull().list())' | grep gitlab-reddit-$CI_COMMIT_SHA | grep -E -o "([0-9]{1,3}[\.]){3}[0-9]{1,3}"):9292
+    - curl $(gcloud compute instances list --format='table(name,networkInterfaces[].accessConfigs[0].natIP.notnull().list())' | grep gitlab-reddit-$CI_COMMIT_SHA | grep -E -o "([0-9]{1,3}[\.]){3}[0-9]{1,3}"):9292
     - gcloud compute instances delete gitlab-reddit-$CI_COMMIT_SHA --quiet --zone europe-west3-c
   environment:
     name: branch/$CI_COMMIT_REF_NAME
