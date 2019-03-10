@@ -25,27 +25,27 @@ build_job:
     - docker tag gitlab-reddit:latest darkarren/otus-reddit:2.0
     - docker push darkarren/otus-reddit:2.0
 
-# test_unit_job:
-#   stage: test
-#   services:
-#     - mongo:latest
-#   script:
-#     - cd reddit
-#     - bundle install
-#     - ruby simpletest.rb
+test_unit_job:
+  stage: test
+  services:
+    - mongo:latest
+  script:
+    - cd reddit
+    - bundle install
+    - ruby simpletest.rb
 
-# test_integration_job:
-#   stage: test
-#   script:
-#     - echo 'Testing 2'
+test_integration_job:
+  stage: test
+  script:
+    - echo 'Testing 2'
 
-# deploy_dev_job:
-#   stage: review
-#   script:
-#     - echo 'Deploy'
-#   environment:
-#     name: dev
-#     url: http://dev.example.com
+deploy_dev_job:
+  stage: review
+  script:
+    - echo 'Deploy'
+  environment:
+    name: dev
+    url: http://dev.example.com
 
 branch review:
   image: google/cloud-sdk:latest
