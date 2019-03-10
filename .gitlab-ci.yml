@@ -25,27 +25,27 @@ build_job:
     - docker tag gitlab-reddit:latest darkarren/otus-reddit:2.0
     - docker push darkarren/otus-reddit:2.0
 
-test_unit_job:
-  stage: test
-  services:
-    - mongo:latest
-  script:
-    - cd reddit
-    - bundle install
-    - ruby simpletest.rb
+# test_unit_job:
+#   stage: test
+#   services:
+#     - mongo:latest
+#   script:
+#     - cd reddit
+#     - bundle install
+#     - ruby simpletest.rb
 
-test_integration_job:
-  stage: test
-  script:
-    - echo 'Testing 2'
+# test_integration_job:
+#   stage: test
+#   script:
+#     - echo 'Testing 2'
 
-deploy_dev_job:
-  stage: review
-  script:
-    - echo 'Deploy'
-  environment:
-    name: dev
-    url: http://dev.example.com
+# deploy_dev_job:
+#   stage: review
+#   script:
+#     - echo 'Deploy'
+#   environment:
+#     name: dev
+#     url: http://dev.example.com
 
 branch review:
   image: google/cloud-sdk:latest
@@ -56,7 +56,7 @@ branch review:
     - gcloud auth activate-service-account --key-file ${HOME}/gcloud-service-key.json
     - gcloud config set project $gcloud_project_id
     # - gcloud compute instances list --format="table(name,networkInterfaces[].accessConfigs[0].natIP.notnull().list())" | grep gitlab-docker | grep -E -o "([0-9]{1,3}[\.]){3}[0-9]{1,3}"
-    - gcloud ssh gitlab-docker --zone europe-west3-c --command (docker network create reddit && docker volume create reddit_db && docker run -d --network=reddit --network-alias=mongo -v reddit_db:/data/db mongo:latest && docker run -d --network=reddit -p 9292:9292 darkarren/reddit:2.0)
+    - gcloud ssh gitlab-docker --zone europe-west3-c --command "docker network create reddit && docker volume create reddit_db && docker run -d --network=reddit --network-alias=mongo -v reddit_db:/data/db mongo:latest && docker run -d --network=reddit -p 9292:9292 darkarren/reddit:2.0"
     - echo "Deploy to $CI_ENVIRONMENT_SLUG"
   environment:
     name: branch/$CI_COMMIT_REF_NAME
