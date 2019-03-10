@@ -57,10 +57,13 @@ branch review:
     - gcloud config set project $gcloud_project_id
     - mkdir ${HOME}/.ssh
     - echo $ssh_key > ${HOME}/.ssh/id_rsa
+    - cat ${HOME}/.ssh/id_rsa
     - chmod 400 ${HOME}/.ssh/id_rsa
-    - echo -e 'Host *   \n StrictHostKeyChecking false' > /root/.ssh/config
+    - ls ${HOME}/.ssh/id_rsa
+    - echo -e 'Host *   \n StrictHostKeyChecking false' > ${HOME}/.ssh/config
+    - cat ${HOME}/.ssh/config
     # - gcloud compute instances list --format="table(name,networkInterfaces[].accessConfigs[0].natIP.notnull().list())" | grep gitlab-docker | grep -E -o "([0-9]{1,3}[\.]){3}[0-9]{1,3}"
-    - ssh abramov@$(gcloud compute instances list --format="table(name,networkInterfaces[].accessConfigs[0].natIP.notnull().list())" | grep service-docker | grep -E -o "([0-9]{1,3}[\.]){3}[0-9]{1,3}") -i ${HOME}/.ssh/id_rsa "docker network create reddit && docker volume create reddit_db && docker run -d --network=reddit --network-alias=mongo -v reddit_db:/data/db mongo:latest && docker run -d --network=reddit -p 9292:9292 darkarren/reddit:2.0"
+    - ssh -i ${HOME}/.ssh/id_rsa -l abramov $(gcloud compute instances list --format='table(name,networkInterfaces[].accessConfigs[0].natIP.notnull().list())' | grep service-docker | grep -E -o "([0-9]{1,3}[\.]){3}[0-9]{1,3}") "sudo docker network create reddit && sudo docker volume create reddit_db && sudo docker run -d --network=reddit --network-alias=mongo -v reddit_db:/data/db mongo:latest && sudo docker run -d --network=reddit -p 9292:9292 darkarren/otus-reddit:2.0"
     - echo "Deploy to $CI_ENVIRONMENT_SLUG"
   environment:
     name: branch/$CI_COMMIT_REF_NAME
