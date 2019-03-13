@@ -1181,7 +1181,12 @@ Runner registered successfully. Feel free to start it, but if it's running alrea
 
 ### HW19: Задание со * 1
 
+#### Dockerfile
+
 - Подготовил Dockerfile для сборки контейнера с приложением
+- Добавил environment variables в Settings проекта (Settings - CI/CD - Environment variables):
+   - docker_hub_password - пароль учетной записи для авторизации на docker hub (необходимо для пуша собранного контейнера в registry)
+   - добавил в config.toml priveleged = true, добавил "/var/run/docker.sock:/var/run/docker.sock" <https://gitlab.com/gitlab-org/gitlab-runner/issues/1986>
 
 <details>
   <summary>для самопроверки</summary>
@@ -1191,10 +1196,136 @@ docker network create reddit
 docker volume create reddit_db
 
 docker run -d --network=reddit --network-alias=mongo -v reddit_db:/data/db mongo:latest \
-&& docker run -d --network=reddit -p 9292:9292 darkarren/reddit:1.0
+&& docker run -d --network=reddit -p 9292:9292 darkarren/reddit:2.0
 ```
 
 </details>
 
-- Установил на гитлаб раннер docker (возможно так делать не нужно)
-- добавил в config.toml priveleged = true, добавил "/var/run/docker.sock:/var/run/docker.sock" <https://gitlab.com/gitlab-org/gitlab-runner/issues/1986>
+<details>
+  <summary>docker build on gitlab</summary>
+
+```bash
+Running with gitlab-runner 11.8.0 (4745a6f3)
+  on my-runner q5RBqrdu
+Using Docker executor with image docker:dind ...
+Pulling docker image docker:dind ...
+Using docker image sha256:85e924caedbd3e5245ad95cc7471168e923391b22dcb559decebe4a378a06939 for docker:dind ...
+Running on runner-q5RBqrdu-project-1-concurrent-0 via 730f5101340a...
+Fetching changes...
+HEAD is now at 54100c3 fix syntax error
+From http://34.76.49.221/homework/example
+   54100c3..4d204b1  gitlab-ci-1 -> origin/gitlab-ci-1
+Checking out 4d204b19 as gitlab-ci-1...
+Skipping Git submodules setup
+$ echo 'Before script'
+Before script
+$ echo 'Building'
+Building
+$ docker login -u darkarren -p $docker_hub_password
+WARNING! Using --password via the CLI is insecure. Use --password-stdin.
+WARNING! Your password will be stored unencrypted in /root/.docker/config.json.
+Configure a credential helper to remove this warning. See
+https://docs.docker.com/engine/reference/commandline/login/#credentials-store
+
+Login Succeeded
+$ docker build -t gitlab-reddit:latest ./reddit
+Sending build context to Docker daemon  38.91kB
+
+Step 1/10 : FROM ruby:2.2
+ ---> 6c8e6f9667b2
+Step 2/10 : RUN apt-get update -qq && apt-get install -y build-essential=11.7 --no-install-recommends  && apt-get clean  && rm -rf /var/lib/apt/lists/*
+ ---> Using cache
+ ---> bb55fcd3f400
+Step 3/10 : ENV APP_HOME /app
+ ---> Using cache
+ ---> 904eb73308e7
+Step 4/10 : RUN mkdir $APP_HOME
+ ---> Using cache
+ ---> fa49864947db
+Step 5/10 : WORKDIR $APP_HOME
+ ---> Using cache
+ ---> 31566a85676f
+Step 6/10 : COPY Gemfile* $APP_HOME/
+ ---> Using cache
+ ---> 779d7e51e6ff
+Step 7/10 : RUN bundle install
+ ---> Using cache
+ ---> 7898fb071309
+Step 8/10 : COPY . $APP_HOME
+ ---> Using cache
+ ---> d9c9559bbed3
+Step 9/10 : ENV DATABASE_URL mongo
+ ---> Using cache
+ ---> e858759b9ea2
+Step 10/10 : CMD ["puma"]
+ ---> Using cache
+ ---> 579368cc5f66
+Successfully built 579368cc5f66
+Successfully tagged gitlab-reddit:latest
+$ docker tag gitlab-reddit:latest darkarren/otus-reddit:2.0
+$ docker push darkarren/otus-reddit:2.0
+The push refers to repository [docker.io/darkarren/otus-reddit]
+b45ae6f5e9fc: Preparing
+2dcaf24f45d8: Preparing
+085a3fd2839e: Preparing
+b268c71d96a9: Preparing
+f1c76ffa42a9: Preparing
+80841241fd7e: Preparing
+c22d55e31b65: Preparing
+9a920ae35b85: Preparing
+23044129c2ac: Preparing
+8b229ec78121: Preparing
+3b65755e1220: Preparing
+2c833f307fd8: Preparing
+80841241fd7e: Waiting
+c22d55e31b65: Waiting
+9a920ae35b85: Waiting
+23044129c2ac: Waiting
+8b229ec78121: Waiting
+3b65755e1220: Waiting
+2c833f307fd8: Waiting
+f1c76ffa42a9: Layer already exists
+b268c71d96a9: Layer already exists
+085a3fd2839e: Layer already exists
+2dcaf24f45d8: Layer already exists
+b45ae6f5e9fc: Layer already exists
+8b229ec78121: Layer already exists
+c22d55e31b65: Layer already exists
+80841241fd7e: Layer already exists
+23044129c2ac: Layer already exists
+9a920ae35b85: Layer already exists
+2c833f307fd8: Layer already exists
+3b65755e1220: Layer already exists
+2.0: digest: sha256:6b72d27ea673c391c08d7da6d7be70f2551cdca95c5125b985df2fd1e8bc43e8 size: 2837
+Job succeeded
+
+```
+
+</details>
+
+#### Деплой из Gitlab
+
+- Создал новый service account в gcp, добавил роли Compute Admin и Owner для проекта (скорее всего избыточно и, возможно, небезопасно, однако на борьбу с правами ушло слишком много времени)
+- Добавил environment variables в Settings проекта (Settings - CI/CD - Environment variables):
+  - gcloud_compute_service_account - учетные данные последующего использования для авторизации в glcoud
+  - gcloud_project_id - id проекта docker-123456
+  - ssh_key - приватный ключ для авторизации на создаваемых инстансах
+- Настроил деплой собранного контейнера на создаваемый инстанс в gcp:
+  - Используется docker-образ с предустановленным gcloud sdk
+  - gcloud настраивается для работы от имени сервесной учетной записи - на раннер передается json для авторизации под сервисным эккаунтом
+  - настраивается ssh - ssh-конфиг, приватный ключ
+  - создается инстанс специально для ветки (используется хэш коммита в имени инстанса) `gcloud compute instances create gitlab-reddit-$CI_COMMIT_SHA`
+  - посредством ssh command запускаются docker-образы mongodb и приложения, собранного на этапе билда
+  - посредством curl делается запрос к главной странице приложения (это минимальная проверка)
+  - инстанс удаляется
+
+#### GitLab runner automated deployment
+
+Skipped
+
+#### Интеграция GitLab и Slack
+
+- Добавил в workspace в Slack приложение incoming webhooks
+- Получил WebHook URL 
+- Добавил webhook url в настройках интеграции со Slack в GitLab (Project Settings - Integration - Slack Notification)
+- Убедился что нотификация прошла
