@@ -681,6 +681,9 @@ f17ce8720c1f5aac24cd65f5513d0ce2d050a3c4988d211de1f64fbcc8c0440a
 
 </details>
 
+<details>
+  <summary>HomeWork 17 - Сетевое взаимодействие Docker контейнеров. Docker Compose. Тестирование образов</summary>
+
 ## HomeWork 17 - Сетевое взаимодействие Docker контейнеров. Docker Compose. Тестирование образов
 
 - Работа будет проводиться на docker host (созданный посредством docker-machine), подключение к хосту
@@ -1062,3 +1065,267 @@ Creating avadakedavra_comment_1 ... done
 </details>
 
 - Запустил контейнеры `docker-compose up -d`, написал пост, перезапустилконтейнеры и убедился, что пост сохранился
+
+</details>
+
+## HomeWork 19 - Устройство Gitlab CI. Построение процесса непрерывной поставки
+
+- Создал виртумальную машину через docker-machine
+
+<details>
+  <summary>new docker-machine</summary>
+
+```bash
+docker-machine create --driver google --google-machine-image https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/family/ubuntu-1604-lts --google-machine-type n1-standard-1 --google-disk-size 100 --google-zone europe-west1-b gitlab-ci
+```
+
+</details>
+
+- Подключился к новой vm - `eval $(docker-machine env gitlab-ci)`
+- Разрешил подключение к машину через http - https
+- Создал необходимые директории и файл docker-compose.yml
+
+<details>
+  <summary>gitlab-ci docker-compose</summary>
+
+```bash
+web:
+  image: 'gitlab/gitlab-ce:latest'
+  restart: always
+  hostname: 'gitlab.example.com'
+  environment:
+    GITLAB_OMNIBUS_CONFIG: |
+      external_url 'http://<YOUR-VM-IP>'
+  ports:
+    - '80:80'
+    - '443:443'
+    - '2222:22'
+  volumes:
+    - '/srv/gitlab/config:/etc/gitlab'
+    - '/srv/gitlab/logs:/var/log/gitlab'
+    - '/srv/gitlab/data:/var/opt/gitlab'
+```
+
+</details>
+
+- Установил docker-compose и запустил `docker-compose up -d`
+- Установил root-пароль и залогинился в gitlab
+- Отключил Sign-up
+- Создал Project Group - Homework
+- Создал новый проект в группе - example
+- Добавил remote в репозиторий DarkArren_microservices `git remote add gitlab http://34.76.49.221/homework/example.git`
+- Запушил в gitlab - `git push gitlab gitlab-ci-1`
+- Добавил в репозиторий `.gitalb-ci.yml` и запушил в репозиторий
+- Получил токен для регистрации раннера `DdPTtWTxaS6o8t9G1LPF`
+- Запустил контейнер gitlab-runner на сервере gitlab
+
+<details>
+  <summary>gitlab runner</summary>
+
+```bash
+docker run -d --name gitlab-runner --restart always \
+-v /srv/gitlab-runner/config:/etc/gitlab-runner \
+-v /var/run/docker.sock:/var/run/docker.sock \
+gitlab/gitlab-runner:latest
+```
+
+</details>
+
+- Зарегистрировал gitlab-runner
+
+<details>
+  <summary>gitlab-runner registration</summary>
+
+```bash
+root@gitlab-ci:/home/docker-user# docker exec -it gitlab-runner gitlab-runner register --run-untagged --locked=false
+Runtime platform                                    arch=amd64 os=linux pid=11 revision=4745a6f3 version=11.8.0
+Running in system-mode.
+
+Please enter the gitlab-ci coordinator URL (e.g. https://gitlab.com/):
+http://34.76.49.221/
+Please enter the gitlab-ci token for this runner:
+DdPTtWTxaS6o8t9G1LPF
+Please enter the gitlab-ci description for this runner:
+[730f5101340a]: my-runner
+Please enter the gitlab-ci tags for this runner (comma separated):
+linux,xenial,ubuntu,docker
+Registering runner... succeeded                     runner=DdPTtWTx
+Please enter the executor: shell, virtualbox, docker+machine, docker-ssh+machine, docker, docker-ssh, parallels, ssh, kubernetes:
+docker
+Please enter the default Docker image (e.g. ruby:2.1):
+alpine:latest
+Runner registered successfully. Feel free to start it, but if it's running already the config should be automatically reloaded!
+```
+
+</details>
+
+- Убедился что gitlab-runner доступен в web-интерфейсе
+- Убедился что pipeline запустился и прошел успешно
+- Добавил в репозиторий исходный код прилоежния reddit и запушил в репозиторий gitlab
+- Изменил описание pipeline в .gitlab-ci.yml для запуска тестов приложения
+- Добавил файл `simpletest.rb` с описанием теста в директорию приложения
+- Добавил библиотеку для тестирования `rack-test` в `reddit/Gemfile`
+- Запушил изменения в gitlab и убедился, что тесты прошли
+
+### Окружения
+
+- Изменил deploy_job так, чтобы он стал поределением окржуения dev
+- Убедился в том, что в Operations - Environments появилось описание первого окружения - dev
+- Добавил в .gitlab-ci.yml описание для окружения stage и production
+- Добавил в описание stage и production окружий директиву only, которая позволит запустить job только если установлен semver тэг в git, например, 2.4.10
+- Проверил запуск все job при пуше изменений, которые помечены тегом
+
+### Динамические окружения
+
+- Добавил определение динамического окржуения для веток кроме master
+
+### HW19: Задание со * 1
+
+#### Dockerfile
+
+- Подготовил Dockerfile для сборки контейнера с приложением
+- Добавил environment variables в Settings проекта (Settings - CI/CD - Environment variables):
+   - docker_hub_password - пароль учетной записи для авторизации на docker hub (необходимо для пуша собранного контейнера в registry)
+   - добавил в config.toml priveleged = true, добавил "/var/run/docker.sock:/var/run/docker.sock" <https://gitlab.com/gitlab-org/gitlab-runner/issues/1986>
+
+<details>
+  <summary>для самопроверки</summary>
+
+```bash
+docker network create reddit
+docker volume create reddit_db
+
+docker run -d --network=reddit --network-alias=mongo -v reddit_db:/data/db mongo:latest \
+&& docker run -d --network=reddit -p 9292:9292 darkarren/reddit:2.0
+```
+
+</details>
+
+<details>
+  <summary>docker build on gitlab</summary>
+
+```bash
+Running with gitlab-runner 11.8.0 (4745a6f3)
+  on my-runner q5RBqrdu
+Using Docker executor with image docker:dind ...
+Pulling docker image docker:dind ...
+Using docker image sha256:85e924caedbd3e5245ad95cc7471168e923391b22dcb559decebe4a378a06939 for docker:dind ...
+Running on runner-q5RBqrdu-project-1-concurrent-0 via 730f5101340a...
+Fetching changes...
+HEAD is now at 54100c3 fix syntax error
+From http://34.76.49.221/homework/example
+   54100c3..4d204b1  gitlab-ci-1 -> origin/gitlab-ci-1
+Checking out 4d204b19 as gitlab-ci-1...
+Skipping Git submodules setup
+$ echo 'Before script'
+Before script
+$ echo 'Building'
+Building
+$ docker login -u darkarren -p $docker_hub_password
+WARNING! Using --password via the CLI is insecure. Use --password-stdin.
+WARNING! Your password will be stored unencrypted in /root/.docker/config.json.
+Configure a credential helper to remove this warning. See
+https://docs.docker.com/engine/reference/commandline/login/#credentials-store
+
+Login Succeeded
+$ docker build -t gitlab-reddit:latest ./reddit
+Sending build context to Docker daemon  38.91kB
+
+Step 1/10 : FROM ruby:2.2
+ ---> 6c8e6f9667b2
+Step 2/10 : RUN apt-get update -qq && apt-get install -y build-essential=11.7 --no-install-recommends  && apt-get clean  && rm -rf /var/lib/apt/lists/*
+ ---> Using cache
+ ---> bb55fcd3f400
+Step 3/10 : ENV APP_HOME /app
+ ---> Using cache
+ ---> 904eb73308e7
+Step 4/10 : RUN mkdir $APP_HOME
+ ---> Using cache
+ ---> fa49864947db
+Step 5/10 : WORKDIR $APP_HOME
+ ---> Using cache
+ ---> 31566a85676f
+Step 6/10 : COPY Gemfile* $APP_HOME/
+ ---> Using cache
+ ---> 779d7e51e6ff
+Step 7/10 : RUN bundle install
+ ---> Using cache
+ ---> 7898fb071309
+Step 8/10 : COPY . $APP_HOME
+ ---> Using cache
+ ---> d9c9559bbed3
+Step 9/10 : ENV DATABASE_URL mongo
+ ---> Using cache
+ ---> e858759b9ea2
+Step 10/10 : CMD ["puma"]
+ ---> Using cache
+ ---> 579368cc5f66
+Successfully built 579368cc5f66
+Successfully tagged gitlab-reddit:latest
+$ docker tag gitlab-reddit:latest darkarren/otus-reddit:2.0
+$ docker push darkarren/otus-reddit:2.0
+The push refers to repository [docker.io/darkarren/otus-reddit]
+b45ae6f5e9fc: Preparing
+2dcaf24f45d8: Preparing
+085a3fd2839e: Preparing
+b268c71d96a9: Preparing
+f1c76ffa42a9: Preparing
+80841241fd7e: Preparing
+c22d55e31b65: Preparing
+9a920ae35b85: Preparing
+23044129c2ac: Preparing
+8b229ec78121: Preparing
+3b65755e1220: Preparing
+2c833f307fd8: Preparing
+80841241fd7e: Waiting
+c22d55e31b65: Waiting
+9a920ae35b85: Waiting
+23044129c2ac: Waiting
+8b229ec78121: Waiting
+3b65755e1220: Waiting
+2c833f307fd8: Waiting
+f1c76ffa42a9: Layer already exists
+b268c71d96a9: Layer already exists
+085a3fd2839e: Layer already exists
+2dcaf24f45d8: Layer already exists
+b45ae6f5e9fc: Layer already exists
+8b229ec78121: Layer already exists
+c22d55e31b65: Layer already exists
+80841241fd7e: Layer already exists
+23044129c2ac: Layer already exists
+9a920ae35b85: Layer already exists
+2c833f307fd8: Layer already exists
+3b65755e1220: Layer already exists
+2.0: digest: sha256:6b72d27ea673c391c08d7da6d7be70f2551cdca95c5125b985df2fd1e8bc43e8 size: 2837
+Job succeeded
+
+```
+
+</details>
+
+#### Деплой из Gitlab
+
+- Создал новый service account в gcp, добавил роли Compute Admin и Owner для проекта (скорее всего избыточно и, возможно, небезопасно, однако на борьбу с правами ушло слишком много времени)
+- Добавил environment variables в Settings проекта (Settings - CI/CD - Environment variables):
+  - gcloud_compute_service_account - учетные данные последующего использования для авторизации в glcoud
+  - gcloud_project_id - id проекта docker-123456
+  - ssh_key - приватный ключ для авторизации на создаваемых инстансах
+- Настроил деплой собранного контейнера на создаваемый инстанс в gcp:
+  - Используется docker-образ с предустановленным gcloud sdk
+  - gcloud настраивается для работы от имени сервесной учетной записи - на раннер передается json для авторизации под сервисным эккаунтом
+  - настраивается ssh - ssh-конфиг, приватный ключ
+  - создается инстанс специально для ветки (используется хэш коммита в имени инстанса) `gcloud compute instances create gitlab-reddit-$CI_COMMIT_SHA`
+  - посредством ssh command запускаются docker-образы mongodb и приложения, собранного на этапе билда
+  - посредством curl делается запрос к главной странице приложения (это минимальная проверка)
+  - инстанс удаляется
+
+#### GitLab runner automated deployment
+
+Skipped
+
+#### Интеграция GitLab и Slack
+
+- Добавил в workspace в Slack приложение incoming webhooks
+- Получил WebHook URL 
+- Добавил webhook url в настройках интеграции со Slack в GitLab (Project Settings - Integration - Slack Notification)
+- Убедился что нотификация прошла
