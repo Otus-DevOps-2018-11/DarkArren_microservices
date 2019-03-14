@@ -1068,6 +1068,9 @@ Creating avadakedavra_comment_1 ... done
 
 </details>
 
+<details>
+  <summary>HomeWork 19 - Устройство Gitlab CI. Построение процесса непрерывной поставки</summary>
+
 ## HomeWork 19 - Устройство Gitlab CI. Построение процесса непрерывной поставки
 
 - Создал виртумальную машину через docker-machine
@@ -1329,3 +1332,100 @@ Skipped
 - Получил WebHook URL 
 - Добавил webhook url в настройках интеграции со Slack в GitLab (Project Settings - Integration - Slack Notification)
 - Убедился что нотификация прошла
+
+</details>
+
+## HomeWork 20 - Введение в мониторинг. Системы мониторинга
+
+- Создано firewall-правило для prometheus `gcloud compute firewall-rules create prometheus-default --allow tcp:9090`
+- Создано firewall-правило для puma `gcloud compute firewall-rules create puma-default --allow tcp:9292`
+- Создан хост docker-machine 
+
+<details>
+  <summary>docker-machine</summary>
+
+```bash
+docker-machine create --driver google \
+--google-machine-image https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/
+images/family/ubuntu-1604-lts \
+--google-machine-type n1-standard-1 \
+--google-zone
+```
+
+</details>
+
+- Запущен контейнер контейнер prometheus
+
+<details>
+  <summary>docker run prometheus</summary>
+
+```bash
+docker run --rm -p 9090:9090 -d --name prometheus prom/prometheus:v2.1.0
+
+Unable to find image 'prom/prometheus:v2.1.0' locally
+v2.1.0: Pulling from prom/prometheus
+aab39f0bc16d: Pull complete
+a3ed95caeb02: Pull complete
+2cd9e239cea6: Pull complete
+48afad9e6cdd: Pull complete
+8fb7aa0e1c16: Pull complete
+3b9d4fd63760: Pull complete
+57a87cf4a659: Pull complete
+9a31588e38ae: Pull complete
+7a0ac0080f04: Pull complete
+659e24e6d37f: Pull complete
+Digest: sha256:7b987901dbc44d17a88e7bda42dbbbb743c161e3152662959acd9f35aeefb9a3
+Status: Downloaded newer image for prom/prometheus:v2.1.0
+48249e51e53509a6fec470cbfdfedca54dd8d3c0eb4c2a68cb7b3530bca31f17
+```
+
+</details>
+
+- Поосмтрел метрики, которые уже сейчас собирает prometheus
+- Посмотрел список таргетов, с которых prometheus забирает метрики
+- Остановил контейнер с prometheus `docker stop prometheus`
+- Перенес docker-monolith и файлы docker-compose и .env из src в новую директорию docker
+- Создал директорию под все, что связано с мониторингом - monitoring
+- Добавил monitoring/prometheus/Dockerfile для создания образа с кастомным конфигом
+- Создал конфиг prometheus.yml
+- Собрал образ prometheus `docker build -t darkarren/prometheus .`
+- Собрал образы микросервисов посредсвом docker_build.sh
+
+<details>
+  <summary>docker_build.sh</summary>
+
+```bash
+for i in ui post-py comment; do cd src/$i; bash
+docker_build.sh; cd -; done
+
+
+```
+
+</details>
+
+- удалил из src/docker-compose.yml директивы build и добавил описание для prometheus
+- добавил конфигурацию networks для prometheus в docker-compose
+- актуализировал переменные в .env
+- запустил контейнеры `docker-compose up -d`
+- приложения доступно по адресу <http://34.76.154.234:9292/> и prometheus доступен на <http://34.76.154.234:9090/>
+
+### Мониторинг состояния микросервисов
+
+- Убедился что в prometheus определены и доступны эндпоинты ui и comment
+- Получил статус метрики ui_health, так же получил ее в виде графика
+- Остановил микросервис post и увидел, что метрика изменила свое значение на 0
+- Посмотрел метрики доступности сервисов comment и post
+- Заново запустил post-микросервис `docker-compose start post`
+
+### Сбор метрик хоста
+
+- Добавил определение контейнера node-exporter в docker-compose.yml
+- Добавил job для node-exporter в конфиг Prometheus и пересобрал контейнер
+- Остановил и повторно запустил контейнеры docker-compose
+- Убедился в том, что в списке эндпоинтов пояивлся эндпоинт node
+- Выполнил `yes > /dev/null` на docker-host и убедился что метрики демонстрируют увеличение нагрузки на процессор
+- Загрузил образы на Docker Hub <https://hub.docker.com/u/darkarren>
+
+### HW 20: Задание со * 1
+
+- 
