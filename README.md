@@ -369,7 +369,7 @@ eval $(docker-machine env docker-host)
 
 <details>
   <summary>Docker build -t darkarren/post:1.0 ./post-py</summary>
-  
+
 ```bash
 Docker build -t darkarren/post:1.0 ./post-py
 
@@ -384,7 +384,7 @@ error: command 'gcc' failed with exit status 1
 
 <details>
   <summary>Docker build -t darkarren/post:1.0 ./post-py</summary>
-  
+
 ```bash
 Docker build -t darkarren/post:1.0 ./post-py
 
@@ -408,7 +408,7 @@ Successfully tagged darkarren/post:1.0)
 
 <details>
   <summary>Docker build -t darkarren/comment:1.0 ./comment</summary>
-  
+
 ```bash
 Docker build -t darkarren/comment:1.0 ./comment
 
@@ -436,7 +436,7 @@ Successfully tagged darkarren/comment:1.0
 
 <details>
   <summary>docker build -t darkarren/ui:1.0 ./ui</summary>
-  
+
 ```bash
 docker build -t darkarren/ui:1.0 ./ui
 
@@ -464,7 +464,7 @@ Successfully tagged darkarren/ui:1.0
 
 <details>
   <summary>docker run</summary>
-  
+
 ```bash
 docker run -d --network=reddit --network-alias=post_db --network-alias=comment_db mongo:latest
 docker run -d --network=reddit --network-alias=post darkarren/post:1.0
@@ -501,7 +501,7 @@ docker run -d --network=reddit --network-alias=post_db_1 --network-alias=comment
 
 <details>
   <summary>docker images</summary>
-  
+
 ```bash
 REPOSITORY          TAG                 IMAGE ID            CREATED             SIZE
 darkarren/ui        1.0                 01fc57529a44        About an hour ago   767MB
@@ -581,7 +581,7 @@ CMD ["puma"]
 
 ```
 
-</details>  
+</details>
 
 - Подготовил новый образ для post. Удалось уменьшить образ до 106MB
 
@@ -717,7 +717,7 @@ lo        Link encap:Local Loopback
           RX bytes:0 (0.0 B)  TX bytes:0 (0.0 B)
 
 ```
-  
+
 </details>
 
 - Запустил контейнер в сетевом пространстве docker-хоста
@@ -951,7 +951,7 @@ br-b03a6069d26e   8000.0242c4f36874   no            veth12b3738
 </details>
 
 - Отобразил iptables `sudo iptables -nL -t nat`
-  
+
 <details>
   <summary>sudo iptables -nL -t nat</summary>
 
@@ -984,7 +984,7 @@ DNAT       tcp  --  0.0.0.0/0            0.0.0.0/0            tcp dpt:9292 to:10
 
 </details>
 
-- Нашел процесс, который слушает порт 9292: 
+- Нашел процесс, который слушает порт 9292:
 
 <details>
   <summary>ps ax | grep docker-proxy</summary>
@@ -1329,7 +1329,7 @@ Skipped
 #### Интеграция GitLab и Slack
 
 - Добавил в workspace в Slack приложение incoming webhooks
-- Получил WebHook URL 
+- Получил WebHook URL
 - Добавил webhook url в настройках интеграции со Slack в GitLab (Project Settings - Integration - Slack Notification)
 - Убедился что нотификация прошла
 
@@ -1339,7 +1339,7 @@ Skipped
 
 - Создано firewall-правило для prometheus `gcloud compute firewall-rules create prometheus-default --allow tcp:9090`
 - Создано firewall-правило для puma `gcloud compute firewall-rules create puma-default --allow tcp:9292`
-- Создан хост docker-machine 
+- Создан хост docker-machine
 
 <details>
   <summary>docker-machine</summary>
@@ -1428,4 +1428,231 @@ docker_build.sh; cd -; done
 
 ### HW 20: Задание со * 1
 
-- 
+- Решил использовать для мониторинг MongoDB Percona MongoDB Exporter
+- Source code: <https://github.com/percona/mongodb_exporter>
+- Использоваться будет последний релиз - `git checkout tags/v0.7.0`
+- Создал Dockerfile на основе того, что есть в репозитории, добавил в ./monitoring/mongodb-exporter
+- Подготовил образ mongodb-exporter и запушил в репозиторий на Docker Hub
+- Добавил в docker-compose запуск контейнера с MongoDB Exporter
+
+<details>
+  <summary>docker-compose mongodb-exporter</summary>
+
+```docker
+  mongodb-exporter:
+    image: ${USERNAME}/mongodb-exporter:${MONGO_EXPORTER_VERSION}
+    ports:
+      - '9216:9216'
+    command:
+      - '--collect.database'
+      - '--collect.collection'
+      - '--collect.indexusage'
+      - '--collect.topmetrics'
+      - '--mongodb.uri=mongodb://post_db:27017'
+    networks:
+      back_net:
+        aliases:
+          - mongodb-exporter
+```
+
+</details>
+
+- Добавил в prometheus.yml job mongod, собирающий метрики mongodb-exporter
+
+<details>
+  <summary>prometheus job</summary>
+
+```bash
+  - job_name: 'mongod'
+    static_configs:
+      - targets:
+        - 'mongodb-exporter:9216'
+```
+
+</details>
+
+### HW 20: Задание со * 2 - BlackBox Exporter
+
+- Изучил репозиторий prometheus/blackbox-exporter
+- Подготовил Dockerfile для сборки docker image
+
+<details>
+  <summary>Dockerfile blackbox-exporter</summary>
+
+```Dockerfile
+FROM golang:1.11 as golang
+
+ARG VERSION=0.14.0
+
+WORKDIR /go/src/github.com/blackbox_exporter
+
+RUN git clone https://github.com/prometheus/blackbox_exporter.git . && \
+    git checkout tags/v"${VERSION}" && \
+    make
+
+FROM quay.io/prometheus/busybox:latest
+
+COPY --from=golang /go/src/github.com/blackbox_exporter/blackbox_exporter  /bin/blackbox_exporter
+COPY blackbox.yml       /etc/blackbox_exporter/config.yml
+
+EXPOSE      9115
+ENTRYPOINT  [ "/bin/blackbox_exporter" ]
+CMD         [ "--config.file=/etc/blackbox_exporter/config.yml" ]
+```
+
+</details>
+
+- Подготовил конфигурационный файл blackbox.yml с проверками по http и icmp
+
+<details>
+  <summary>blackbox.yml</summary>
+
+```yml
+modules:
+  http_2xx:
+    prober: http
+    timeout: 5s
+    http:
+      valid_http_versions: ["HTTP/1.1", "HTTP/2"]
+      valid_status_codes:
+        - 200
+        - 404
+      method: GET
+      referred_ip_protocol: "ip4"
+  icmp:
+    prober: icmp
+    timeout: 5s
+    icmp:
+      preferred_ip_protocol: "ip4"
+
+```
+
+</details>
+
+- Столкнулся с проблемой: не проходили тесты при сборке приложения blackbox_exporter так как не было возможности использовать ipv6
+- Создал отдельную машину docker-machine с поддержкой ipv6 для сборки этого image
+
+<details>
+  <summary>docker-machine docker-host-6</summary>
+
+```bash
+docker-machine create --driver google --google-machine-image https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/family/ubuntu-1604-lts --google-machine-type n1-standard-1 --google-disk-size 100 --google-zone europe-west1-b --engine-opt ipv6=true --engine-opt fixed-cidr-v6="fc00::d0c:0:0:0:1/64" docker-host-6
+```
+
+</details>
+
+- Собрал на новой машине docker image и запушил его в Docker Hub
+
+<details>
+  <summary>Docker build blackbox exporter</summary>
+
+```bash
+eval $(docker-machine env docker-host-6)
+cd /monitoring/blackbox-exporter
+docker build -t darkarren/blackbox-exporter:0.14.0 .
+docker push darkarren/blackbox-exporter:0.14.0
+```
+
+</details>
+
+- Добавил запуск blackbox-exporter в docker-compose
+
+<details>
+  <summary>blackbox-exporter docker-compose</summary>
+
+```yml
+  blackbox-exporter:
+    image: ${USERNAME}/blackbox-exporter:${BLACKBOX_EXPORTER_VERSION}
+    ports:
+      - '9115:9115'
+    networks:
+      back_net:
+        aliases:
+          - blackbox-exporter
+
+      front_net:
+        aliases:
+          - blackbox-exporter
+```
+
+</details>
+
+- Добавил job в конфиг prometheus и пересобрал контейнер
+
+<details>
+  <summary>prometheus job</summary>
+
+```yml
+  - job_name: 'blackbox'
+    metrics_path: /probe
+    params:
+      module:
+        - http_2xx # Look for a HTTP 200 response.
+        - icmp
+    static_configs:
+      - targets:
+        - ui:9292
+        - comment:9292
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115  # The blackbox exporter's real hostname:port.
+```
+
+</details>
+
+- Добавил переменную BLACKBOX_EXPORTER_VERSION в .env
+- Запустил `docker-compose up -d`
+
+<details>
+  <summary>docker-compose up -d</summary>
+
+```bash
+docker-compose up -d
+Creating network "docker_front_net" with the default driver
+Creating network "docker_back_net" with the default driver
+Pulling blackbox-exporter (darkarren/blackbox-exporter:0.14.0)...
+0.14.0: Pulling from darkarren/blackbox-exporter
+697743189b6d: Already exists
+f1989cfd335b: Already exists
+75414dad0bf5: Pull complete
+79ee145cb3ee: Pull complete
+Creating docker_comment_1           ... done
+Creating docker_prometheus_1        ... done
+Creating docker_post_db_1           ... done
+Creating docker_mongodb-exporter_1  ... done
+Creating docker_blackbox-exporter_1 ... done
+Creating docker_node-exporter_1     ... done
+Creating docker_ui_1                ... done
+Creating docker_post_1              ... done
+```
+
+</details>
+
+- проверил что контейнеры живы `docker ps`
+
+<details>
+  <summary>docker ps</summary>
+
+```bash
+CONTAINER ID        IMAGE                                COMMAND                  CREATED             STATUS              PORTS                      NAMES
+6ab7b953101e        darkarren/post:latest                "python3 post_app.py"    3 minutes ago       Up 2 minutes                                   docker_post_1
+88e7de234846        prom/node-exporter:v0.15.2           "/bin/node_exporter …"   3 minutes ago       Up 2 minutes        9100/tcp                   docker_node-exporter_1
+52fee9090cfb        darkarren/ui:latest                  "puma --debug '-w 2'"    3 minutes ago       Up 2 minutes        0.0.0.0:9292->9292/tcp     docker_ui_1
+bf6a8c8c5bb2        darkarren/blackbox-exporter:0.14.0   "/bin/blackbox_expor…"   3 minutes ago       Up 2 minutes        0.0.0.0:9115->9115/tcp     docker_blackbox-exporter_1
+b94e02752e47        darkarren/mongodb-exporter:0.7.0     "/bin/mongodb_export…"   3 minutes ago       Up 2 minutes        0.0.0.0:9216->9216/tcp     docker_mongodb-exporter_1
+cbf1b4d8cf92        darkarren/prometheus                 "/bin/prometheus --c…"   3 minutes ago       Up 2 minutes        0.0.0.0:9090->9090/tcp     docker_prometheus_1
+922189d80b5b        mongo:3.6                            "docker-entrypoint.s…"   3 minutes ago       Up 2 minutes        0.0.0.0:27017->27017/tcp   docker_post_db_1
+c3fe5d9cd41c        darkarren/comment:latest             "puma --debug '-w 2'"    3 minutes ago       Up 2 minutes                                   docker_comment_1
+```
+
+</details>
+
+### HW 20 задание со * 3 - Make
+
+- Подготовил Makefile, перед запуском нужно выполнить `export USER_NAME=your-docker-hub-login`
+- Сборка всех контейнеров - `make build-all`
+- Пуш всех контейнеров - `make push-all`

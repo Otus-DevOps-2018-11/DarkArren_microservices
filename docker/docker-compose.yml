@@ -2,8 +2,12 @@ version: '3.3'
 services:
   post_db:
     image: mongo:${MONGO_VERSION} # 3.2
+    ports:
+      - 27017:27017
     volumes:
       - post_db:/data/db
+    command:
+      - '-bind_ip=0.0.0.0'
     networks:
       back_net:
         aliases:
@@ -71,6 +75,35 @@ services:
       back_net:
         aliases:
           - node_exporter
+  mongodb-exporter:
+    image: ${USERNAME}/mongodb-exporter:${MONGO_EXPORTER_VERSION}
+    # image: darkarren/mongodb-exporter:latest
+
+    ports:
+      - '9216:9216'
+    command:
+      - '--collect.database'
+      - '--collect.collection'
+      - '--collect.indexusage'
+      - '--collect.topmetrics'
+      - '--mongodb.uri=mongodb://post_db:27017'
+    networks:
+      back_net:
+        aliases:
+          - mongodb-exporter
+
+  blackbox-exporter:
+    image: ${USERNAME}/blackbox-exporter:${BLACKBOX_EXPORTER_VERSION}
+    ports:
+      - '9115:9115'
+    networks:
+      back_net:
+        aliases:
+          - blackbox-exporter
+
+      front_net:
+        aliases:
+          - blackbox-exporter
 
 volumes:
   post_db:
