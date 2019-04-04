@@ -1,4 +1,4 @@
-build-all: build-ui build-comment build-post build-prometheus build-blackbox-exporter build-mongodb-exporter
+build-all: build-ui build-comment build-post build-prometheus build-blackbox-exporter build-mongodb-exporter build-alertmanager
 
 build-ui:
 	docker build -t $(USER_NAME)/ui src/ui/
@@ -18,7 +18,10 @@ build-blackbox-exporter:
 build-mongodb-exporter:
 	docker build -t $(USER_NAME)/mongodb-exporter:0.7.0 monitoring/mongodb-exporter/
 
-push-all: push-ui push-comment push-post push-prometheus push-blackbox-exporter push-mongodb-exporter
+build-alertmanager:
+	docker build -t $(USER_NAME)/alertmanager monitoring/alertmanager
+
+push-all: push-ui push-comment push-post push-prometheus push-blackbox-exporter push-mongodb-exporter push-alertmanager
 
 push-ui:
 	docker push $(USER_NAME)/ui
@@ -32,6 +35,8 @@ push-blackbox-exporter:
 	docker push $(USER_NAME)/blackbox-exporter:0.14.0
 push-mongodb-exporter:
 	docker push $(USER_NAME)/mongodb-exporter:0.7.0
+push-alertmanager:
+	docker push $(USER_NAME)/alertmanager
 
 
 
