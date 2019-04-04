@@ -1,7 +1,7 @@
 version: '3.3'
 services:
   prometheus:
-    image: ${USERNAME}/prometheus
+    image: ${USER_NAME}/prometheus
     ports:
       - '9090:9090'
     volumes:
@@ -36,7 +36,7 @@ services:
         aliases:
           - node_exporter
   mongodb-exporter:
-    image: ${USERNAME}/mongodb-exporter:${MONGO_EXPORTER_VERSION}
+    image: ${USER_NAME}/mongodb-exporter:${MONGO_EXPORTER_VERSION}
     # image: darkarren/mongodb-exporter:latest
 
     ports:
@@ -53,7 +53,7 @@ services:
           - mongodb-exporter
 
   blackbox-exporter:
-    image: ${USERNAME}/blackbox-exporter:${BLACKBOX_EXPORTER_VERSION}
+    image: ${USER_NAME}/blackbox-exporter:${BLACKBOX_EXPORTER_VERSION}
     ports:
       - '9115:9115'
     networks:
