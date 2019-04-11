@@ -1662,6 +1662,9 @@ c3fe5d9cd41c        darkarren/comment:latest             "puma --debug '-w 2'"  
 
 </details>
 
+<details>
+  <summary>HomeWork 21 - Мониторинг приложения и инфраструктуры</summary>
+
 ## HomeWork 21 - Мониторинг приложения и инфраструктуры
 
 ### Мониторинг Docker-контейнеров
@@ -1716,3 +1719,144 @@ c3fe5d9cd41c        darkarren/comment:latest             "puma --debug '-w 2'"  
 - Убедился что правила алертинга отображаются в web-интерфейсе Prometheus
 - Остановил сервис post и убедился в том, что оповещение пришло в Slack
 - Запушил все образы в Docker Hub - <https://hub.docker.com/u/darkarren>
+
+</details>
+
+## HomeWork 23 - Логирование и респределенная трассировка
+
+- Обновил код приложения и пересобрал образы `for i in ui post-py comment; do cd src/$i; bash docker_build.sh; cd -; done`
+- Создал новый хост docker-machine
+
+<details>
+  <summary>docker-machine logging</summary>
+
+```bash
+docker-machine create --driver google \
+    --google-machine-image https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/family/ubuntu-1604-lts \
+    --google-machine-type n1-standard-1 \
+    --google-open-port 5601/tcp \
+    --google-open-port 9292/tcp \
+    --google-open-port 9411/tcp \
+    logging
+```
+
+</details>
+
+### Логирование Docker-контейнеров
+
+- Подготовил файл docker-compose-logging.yml для контейнеров ElasticSearch, Kibana. Fluentd
+- Создал Dockerfile для Fluentd `logging/fluentd/Dockerfile`
+- Создал файл конфигурации для Fluentd `logging/fluentd/fluent.conf`
+- Добавил в Makefile build-fluentd и push-fluentd и собрал образ fluentd
+- Запустил приложение `docker-compose up -d`
+- Просмотрел логи приложения `docker-compose logs -f post`
+- Добавил опередление драйвера для логирования сервиса post в `docker-compose.yml`
+
+<details>
+  <summary>post compose</summary>
+
+```yml
+  post:
+    image: ${USER_NAME}/post:${POST_VERSION}
+    environment:
+      - POST_DATABASE_HOST=post_db
+      - POST_DATABASE=posts
+    depends_on:
+      - post_db
+    ports:
+      - "5000:5000"
+    networks:
+      front_net:
+        aliases:
+          - post
+      back_net:
+        aliases:
+          - post
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: localhost:24224
+        tag: service.post
+```
+
+</details>
+
+- Запустил контейнеры системы логирования и перезапустил контейнеры приложения
+- Столкнулся с проблемой Kibana - `Kibana server is not ready yet`
+- Выяснил, что проблема Kibana возникает из-за падание контейнера Elasticsearch, изменил параметр на docker-host - `sudo sysctl -w vm.max_map_count=262144`, заработало
+- Добавил Index Pattern на Kibana
+- Посмотрел что логи теперь собираются и отображаются в Kibana
+- Добавил фильтр в конфиг fluentd
+- Пересобрал и перезапустил fluentd `docker-compose -f docker-compose-logging.yml up -d fluentd`
+- Убедился что фильтр применился и вместо одного поля log доступно несколько
+- Убедился что можно найти запись в логе через поиск
+
+### Неструктурированные логи
+
+- Добавил драйвер логирования для сервиса ui
+- Перезапустил контейнер ui
+
+<details>
+  <summary>restert conainer</summary>
+
+```bash
+docker-compose stop ui
+docker-compose rm ui
+docker-compose up -d
+```
+
+</details>
+
+- Добавил фильтр с использованием регулярного выражения для сервиса ui в конфигурационный файл fluent.conf
+
+<details>
+  <summary>regexp</summary>
+
+```bash
+<filter service.ui>
+  @type parser
+  format /\[(?<time>[^\]]*)\]  (?<level>\S+) (?<user>\S+)[\W]*service=(?<service>\S+)[\W]*event=(?<event>\S+)[\W]*(?:path=(?<path>\S+)[\W]*)?request_id=(?<request_id>\S+)[\W]*(?:remote_addr=(?<remote_addr>\S+)[\W]*)?(?:method= (?<method>\S+)[\W]*)?(?:response_status=(?<response_status>\S+)[\W]*)?(?:message='(?<message>[^\']*)[\W]*)?/
+  key_name log
+</filter>
+
+```
+
+</details>
+
+- Пересобрал образ fluentd и перезапустил сервисы логирования
+- Убедился что в кибане корректно распарсились логи микросервиса UI
+- Заменил регулярное выражение на использование grok-паттернов
+- Пересобрал и перезапустил кибану, убедился что логи парсятся корректно
+
+### HW23: Задание со *
+
+- Добавлен второй grok-pattern <https://github.com/fluent/fluent-plugin-grok-parser> в фильтр service.ui
+
+<details>
+  <summary>filter service.ui</summary>
+
+```xml
+<filter service.ui>
+  @type parser
+  format grok
+  grok_pattern service=%{WORD:service} \| event=%{WORD:event} \| request_id=%{GREEDYDATA:request_id} \| message='%{GREEDYDATA:message}'
+  key_name message
+  reserve_data true
+</filter>
+
+<filter service.ui>
+  @type parser
+  format grok
+  grok_pattern service=%{WORD:service} \| event=%{WORD:event} \| path=%{URIPATH:path} \| request_id=%{GREEDYDATA:request_id} \| remote_addr=%{IP:remote_addr} \| method= %{WORD:method} \| response_status=%{NUMBER:response_status}
+  key_name message
+  reserve_data true
+</filter>
+```
+
+</details>
+
+### Распределенный трейсинг ***
+
+- Добавил Zipkin в `docker-compose-logging.yml`
+- В `docker-compose.yml` добавленна env-переменая ZIPKIN_ENABLED=${ZIPKIN_ENABLED} для микросервисов
+- Добавлено значение ZIPKIN_ENABLED в .env
