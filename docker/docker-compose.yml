@@ -15,6 +15,8 @@ services:
           - comment_db
   ui:
     image: ${USER_NAME}/ui:${UI_VERSION} # 1.0
+    environment:
+      - ZIPKIN_ENABLED=${ZIPKIN_ENABLED}
     ports:
       - target: 9292 # the port inside the container
         published: ${PUBLIC_PORT} # the publicly exposed port
@@ -22,8 +24,22 @@ services:
         mode: host # host for publishing a host port on each node, or ingress for a swarm mode port to be load balanced.
     networks:
       - front_net
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: localhost:24224
+        tag: service.ui
+
   post:
-    image: ${USER_NAME}/post:${POST_VERSION} # 1.0
+    image: ${USER_NAME}/post:${POST_VERSION}
+    environment:
+      - ZIPKIN_ENABLED=${ZIPKIN_ENABLED}
+      - POST_DATABASE_HOST=post_db
+      - POST_DATABASE=posts
+    depends_on:
+      - post_db
+    ports:
+      - "5000:5000"
     networks:
       front_net:
         aliases:
@@ -31,8 +47,15 @@ services:
       back_net:
         aliases:
           - post
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: localhost:24224
+        tag: service.post
   comment:
     image: ${USER_NAME}/comment:${COMMENT_VERSION} # 1.0
+    environment:
+      - ZIPKIN_ENABLED=${ZIPKIN_ENABLED}
     networks:
       front_net:
         aliases:
